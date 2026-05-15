@@ -8,9 +8,18 @@ Builds a custom OpenWrt image for the Linksys MR7500 with the AQR114C PHY firmwa
 
 ## Workflow
 
-### 1. Extract AQR114C.cld from the Linksys OEM firmware
+### 1. Clone the repository
 
-Downloads `FW_MR7500_1.1.12.216649_prod.img`, strips the DTB header, extracts the squashfs rootfs from the UBI image, and stages `AQR114C.cld` at `files/lib/firmware/marvell/` on your host. Skip this step if you already have the file from a previous run.
+```bash
+git clone https://github.com/leoarry/openwrt-builder-mr7500.git
+cd openwrt-builder-mr7500
+```
+
+The repo includes `AQR114C.cld` pre-staged at `files/lib/firmware/marvell/`, extracted from firmware `1.1.12.216649`. Skip to step 3 unless you need a different version.
+
+### 2. (Optional) Extract AQR114C.cld from a different firmware version
+
+Downloads the specified OEM firmware image, strips the DTB header, extracts the squashfs rootfs from the UBI image, and overwrites `files/lib/firmware/marvell/AQR114C.cld`.
 
 **Linux/macOS:**
 ```bash
@@ -28,7 +37,7 @@ docker run --rm `
   ./extract-aqr-firmware.sh -v 1.1.12.216649
 ```
 
-### 2. Build the image
+### 3. Build the image
 
 Downloads the OpenWrt 25.12.3 ImageBuilder, builds a factory image for `linksys_mr7500` with the firmware baked in, and places the output in `bin/25.12.3/`. Only `files/` and `bin/` are bind-mounted — the ImageBuilder runs entirely inside the container, so this works on all platforms regardless of filesystem case-sensitivity.
 
@@ -50,7 +59,7 @@ docker run --rm `
   ./build-openwrt.sh -v 25.12.0 -p 'luci luci-ssl-openssl kmod-batman-adv batctl-default'
 ```
 
-### 3. Flash via U-Boot/TFTP
+### 4. Flash via U-Boot/TFTP
 
 **Do not use the web UI** — `auto_recovery` will revert to OEM after 3 reboots (see [#23245](https://github.com/openwrt/openwrt/issues/23245)). Use TFTP from U-Boot and flash **both kernel partitions**.
 
