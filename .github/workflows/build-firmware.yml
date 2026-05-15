@@ -1,0 +1,87 @@
+name: Build OpenWrt Firmware
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'OpenWrt version (leave empty to auto-detect latest)'
+        required: false
+        default: ''
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      skip: ${{ steps.resolve.outputs.skip }}
+    steps:
+      - name: Resolve version and check if already released
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=$(curl -sf \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              https://api.github.com/repos/openwrt/openwrt/releases/latest \
+              | jq -r '.tag_name' | sed 's/^v//')
+          fi
+
+          if [ -z "$VERSION" ]; then
+            echo "Failed to determine OpenWrt version"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${VERSION}" \
+            || echo "404")
+
+          # On scheduled runs, skip if the release already exists.
+          # On manual runs, always build (allows rebuilding/updating an existing release).
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$HTTP" = "200" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Scheduled run: release v${VERSION} already exists, skipping"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            [ "$HTTP" = "200" ] \
+              && echo "Manual run: will rebuild existing release v${VERSION}" \
+              || echo "No existing release for v${VERSION}, will build"
+          fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.skip == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build firmware
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/files:/workspace/files" \
+            -v "${{ github.workspace }}/bin:/workspace/bin" \
+            ghcr.io/leoarry/openwrt-builder-mr7500:latest \
+            ./build-openwrt.sh -v ${{ needs.check.outputs.version }}
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check.outputs.version }}
+          name: OpenWrt ${{ needs.check.outputs.version }} for Linksys MR7500
+          body: |
+            Automated build of OpenWrt ${{ needs.check.outputs.version }} for the Linksys MR7500.
+
+            The AQR114C PHY firmware is baked into the base squashfs so WAN works on first boot.
+            See the [README](https://github.com/${{ github.repository }}#4-flash-via-u-boottftp) for flashing instructions.
+          files: bin/${{ needs.check.outputs.version }}/*
+          fail_on_unmatched_files: true
