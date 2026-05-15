@@ -77,7 +77,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check.outputs.version }}
-          name: OpenWrt ${{ needs.check.outputs.version }} for Linksys MR7500
+          name: v${{ needs.check.outputs.version }}
           body: |
             Automated build of OpenWrt ${{ needs.check.outputs.version }} for the Linksys MR7500.
 
