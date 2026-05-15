@@ -3,7 +3,7 @@
 set -e
 
 VERSION="25.12.3"
-PACKAGES="luci luci-ssl-openssl"
+PACKAGES="luci luci-ssl-openssl luci-app-sqm luci-app-statistics luci-app-watchcat luci-app-nlbwmon curl rsync jq pigz tar iperf3 tcpdump"
 
 usage() {
     echo "Usage: $0 [-v version] [-p packages]"

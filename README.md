@@ -10,17 +10,9 @@ Builds a custom OpenWrt image for the Linksys MR7500 with the AQR114C PHY firmwa
 
 ### 1. Extract AQR114C.cld from the Linksys OEM firmware
 
-```bash
-docker run --rm \
-  -v "$PWD/files:/workspace/files" \
-  ghcr.io/leoarry/openwrt-builder-mr7500:latest \
-  ./extract-aqr-firmware.sh
-```
-
 Downloads `FW_MR7500_1.1.12.216649_prod.img`, strips the DTB header, extracts the squashfs rootfs from the UBI image, and stages `AQR114C.cld` at `files/lib/firmware/marvell/` on your host. Skip this step if you already have the file from a previous run.
 
-If you have a different firmware version:
-
+**Linux/macOS:**
 ```bash
 docker run --rm \
   -v "$PWD/files:/workspace/files" \
@@ -28,25 +20,33 @@ docker run --rm \
   ./extract-aqr-firmware.sh -v 1.1.12.216649
 ```
 
-### 2. Build the image
-
-```bash
-docker run --rm \
-  -v "$PWD/files:/workspace/files" \
-  -v "$PWD/bin:/workspace/bin" \
-  ghcr.io/leoarry/openwrt-builder-mr7500:latest \
-  ./build-openwrt.sh
+**Windows (PowerShell):**
+```powershell
+docker run --rm `
+  -v "${PWD}/files:/workspace/files" `
+  ghcr.io/leoarry/openwrt-builder-mr7500:latest `
+  ./extract-aqr-firmware.sh -v 1.1.12.216649
 ```
+
+### 2. Build the image
 
 Downloads the OpenWrt 25.12.3 ImageBuilder, builds a factory image for `linksys_mr7500` with the firmware baked in, and places the output in `bin/25.12.3/`. Only `files/` and `bin/` are bind-mounted — the ImageBuilder runs entirely inside the container, so this works on all platforms regardless of filesystem case-sensitivity.
 
-Options:
-
+**Linux/macOS:**
 ```bash
 docker run --rm \
   -v "$PWD/files:/workspace/files" \
   -v "$PWD/bin:/workspace/bin" \
   ghcr.io/leoarry/openwrt-builder-mr7500:latest \
+  ./build-openwrt.sh -v 25.12.0 -p 'luci luci-ssl-openssl kmod-batman-adv batctl-default'
+```
+
+**Windows (PowerShell):**
+```powershell
+docker run --rm `
+  -v "${PWD}/files:/workspace/files" `
+  -v "${PWD}/bin:/workspace/bin" `
+  ghcr.io/leoarry/openwrt-builder-mr7500:latest `
   ./build-openwrt.sh -v 25.12.0 -p 'luci luci-ssl-openssl kmod-batman-adv batctl-default'
 ```
 
