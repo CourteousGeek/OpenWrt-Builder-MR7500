@@ -78,7 +78,7 @@ jobs:
 
       - name: Build NSS firmware
         run: |
-          mkdir -p bin
+          mkdir -p bin && chmod 777 bin
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
