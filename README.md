@@ -37,7 +37,7 @@ docker run --rm `
   ./extract-aqr-firmware.sh -v 1.1.12.216649
 ```
 
-### 3. Build the image
+### 3a. Build the vanilla image
 
 Downloads the OpenWrt 25.12.3 ImageBuilder, builds a factory image for `linksys_mr7500` with the firmware baked in, and places the output in `bin/25.12.3/`. Only `files/` and `bin/` are bind-mounted — the ImageBuilder runs entirely inside the container, so this works on all platforms regardless of filesystem case-sensitivity.
 
@@ -57,6 +57,32 @@ docker run --rm `
   -v "${PWD}/bin:/workspace/bin" `
   ghcr.io/leoarry/openwrt-builder-mr7500:latest `
   ./build-openwrt.sh -v 25.12.0 -p 'luci luci-ssl-openssl kmod-batman-adv batctl-default'
+```
+
+### 3b. (Alternative) Build with NSS offloading
+
+Builds from source using [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) (branch `25.12-nss`) with NSS hardware offloading enabled. This is a full source build — it takes significantly longer than the ImageBuilder path above.
+
+The build configuration is defined in `config-nss.seed`, which is copied into the repo as `.config` before the build. It includes the target device, NSS offloading options, packages, and compiler flags — edit it before running to customise what gets built.
+
+Uses the official OpenWrt buildbot image which has all required toolchain dependencies.
+
+**Linux/macOS:**
+```bash
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  ghcr.io/openwrt/buildbot/buildworker-v3.8.0:v9 \
+  bash build-openwrt-nss.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+docker run --rm `
+  -v "${PWD}:/workspace" `
+  -w /workspace `
+  ghcr.io/openwrt/buildbot/buildworker-v3.8.0:v9 `
+  bash build-openwrt-nss.sh
 ```
 
 ### 4. Flash via U-Boot/TFTP

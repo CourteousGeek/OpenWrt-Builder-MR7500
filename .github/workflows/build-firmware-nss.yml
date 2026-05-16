@@ -1,0 +1,83 @@
+name: Build OpenWrt NSS Firmware
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.head.outputs.sha }}
+      short_sha: ${{ steps.head.outputs.short_sha }}
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Get HEAD SHA of qosmio/openwrt-ipq@25.12-nss
+        id: head
+        run: |
+          SHA=$(curl -sf \
+            https://api.github.com/repos/qosmio/openwrt-ipq/commits/25.12-nss \
+            | jq -r '.sha')
+
+          if [ -z "$SHA" ] || [ "$SHA" = "null" ]; then
+            echo "Failed to get HEAD SHA"
+            exit 1
+          fi
+
+          SHORT_SHA="${SHA:0:7}"
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "HEAD SHA: $SHA ($SHORT_SHA)"
+
+      - name: Check if already built
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if a release for this exact short SHA already exists
+          HTTP=$(gh api repos/${{ github.repository }}/releases/tags/25.12-nss-${{ steps.head.outputs.short_sha }} \
+            -q '.tag_name' 2>/dev/null && echo "200" || echo "404")
+
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$HTTP" = "200" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Scheduled run: release 25.12-nss-${{ steps.head.outputs.short_sha }} already exists, skipping"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            [ "$HTTP" = "200" ] \
+              && echo "Manual run: will rebuild existing release 25.12-nss-${{ steps.head.outputs.short_sha }}" \
+              || echo "No release for 25.12-nss-${{ steps.head.outputs.short_sha }}, will build"
+          fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.skip == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build NSS firmware
+        run: |
+          mkdir -p bin
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            ghcr.io/openwrt/buildbot/buildworker-v3.8.0:v9 \
+            bash build-openwrt-nss.sh
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: 25.12-nss-${{ needs.check.outputs.short_sha }}
+          name: 25.12-nss-${{ needs.check.outputs.short_sha }}
+          body: |
+            Automated NSS build from [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) branch `25.12-nss`.
+
+            The AQR114C PHY firmware is baked into the base squashfs so WAN works on first boot.
+            See the [README](https://github.com/${{ github.repository }}#4-flash-via-u-boottftp) for flashing instructions.
+
+            Source SHA: ${{ needs.check.outputs.sha }}
+          files: bin/*mr7500*
+          fail_on_unmatched_files: true
