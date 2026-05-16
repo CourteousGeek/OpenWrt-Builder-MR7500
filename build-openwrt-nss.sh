@@ -5,47 +5,54 @@ set -e
 REPO_URL="https://github.com/qosmio/openwrt-ipq.git"
 REPO_BRANCH="25.12-nss"
 REPO_DIR="openwrt-ipq"
+LOG_FILE=$(mktemp /tmp/build-nss-XXXXXX.log)
+
+trap 'rc=$?; if [ $rc -ne 0 ]; then echo ""; echo "=== Build failed — last 100 lines of output ==="; tail -n 100 "${LOG_FILE}"; fi; rm -f "${LOG_FILE}"' EXIT
+
+run() {
+    local desc="$1"; shift
+    echo -n "${desc}... "
+    if "$@" >>"${LOG_FILE}" 2>&1; then
+        echo "done"
+    else
+        echo "failed"
+        exit 1
+    fi
+}
 
 echo "Building OpenWrt NSS for Linksys MR7500"
+[ -n "${BUILD_SHA}" ] && echo "Target SHA: ${BUILD_SHA}" || echo "Target: HEAD of ${REPO_BRANCH}"
 echo ""
 
 mkdir -p /builder
 cd /builder
 
 if [ ! -d "${REPO_DIR}" ]; then
-    echo "Cloning ${REPO_URL} (branch: ${REPO_BRANCH})..."
-    git clone --branch "${REPO_BRANCH}" --depth 1 "${REPO_URL}" "${REPO_DIR}"
+    if [ -n "${BUILD_SHA}" ]; then
+        run "Cloning repository (full history for SHA checkout)" \
+            git clone --branch "${REPO_BRANCH}" "${REPO_URL}" "${REPO_DIR}"
+    else
+        run "Cloning repository" \
+            git clone --branch "${REPO_BRANCH}" --depth 1 "${REPO_URL}" "${REPO_DIR}"
+    fi
+    cd "${REPO_DIR}"
 else
-    echo "Repo already cloned, skipping"
+    run "Fetching latest" git -C "${REPO_DIR}" fetch origin "${REPO_BRANCH}"
+    cd "${REPO_DIR}"
+    [ -z "${BUILD_SHA}" ] && run "Updating to latest" git checkout FETCH_HEAD
 fi
 
-cd "${REPO_DIR}"
+[ -n "${BUILD_SHA}" ] && run "Checking out ${BUILD_SHA}" git checkout "${BUILD_SHA}"
 
-echo "Copying files from workspace..."
-cp -r /workspace/files ./files
-
-echo "Copying config-nss.seed as .config..."
-cp /workspace/config-nss.seed ./.config
-
-echo "Updating feeds..."
-./scripts/feeds update
-
-echo "Installing feeds..."
-./scripts/feeds install -a
-
-echo "Running defconfig..."
-make defconfig V=s
-
-echo "Downloading sources..."
-make download -j$(nproc) V=s
-
-echo "Building firmware..."
-make -j$(nproc) V=s
-
-echo ""
-echo "Copying output files to /workspace/bin..."
-mkdir -p /workspace/bin
-cp -r ./bin/targets/qualcommax/ipq60xx/*mr7500* /workspace/bin
+run "Copying workspace files"        cp -r /workspace/files ./files
+run "Copying .config"                cp /workspace/config-nss.seed ./.config
+run "Updating feeds"                 ./scripts/feeds update
+run "Installing feeds"               ./scripts/feeds install -a
+run "Running defconfig"              make defconfig V=s
+run "Downloading sources"            make download -j$(nproc) V=s
+run "Building firmware"              make -j$(nproc) V=s
+run "Copying output to /workspace/bin" \
+    bash -c 'mkdir -p /workspace/bin && cp -r ./bin/targets/qualcommax/ipq60xx/*mr7500* /workspace/bin'
 
 echo ""
 echo "Build complete! Images are in: /workspace/bin/"

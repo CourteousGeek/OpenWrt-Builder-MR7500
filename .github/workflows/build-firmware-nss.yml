@@ -4,6 +4,16 @@ on:
   schedule:
     - cron: '0 6 * * *'
   workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Specific commit SHA to build (leave empty for HEAD of 25.12-nss)'
+        required: false
+        default: ''
+      force:
+        description: 'Force rebuild even if release already exists'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   check:
@@ -13,39 +23,47 @@ jobs:
       short_sha: ${{ steps.head.outputs.short_sha }}
       skip: ${{ steps.check.outputs.skip }}
     steps:
-      - name: Get HEAD SHA of qosmio/openwrt-ipq@25.12-nss
+      - name: Resolve SHA
         id: head
         run: |
-          SHA=$(curl -sf \
-            https://api.github.com/repos/qosmio/openwrt-ipq/commits/25.12-nss \
-            | jq -r '.sha')
+          if [ -n "${{ inputs.sha }}" ]; then
+            SHA="${{ inputs.sha }}"
+            echo "Using specified SHA: $SHA"
+          else
+            SHA=$(curl -sf \
+              https://api.github.com/repos/qosmio/openwrt-ipq/commits/25.12-nss \
+              | jq -r '.sha')
+            echo "Resolved HEAD SHA: $SHA"
+          fi
 
           if [ -z "$SHA" ] || [ "$SHA" = "null" ]; then
-            echo "Failed to get HEAD SHA"
+            echo "Failed to resolve SHA"
             exit 1
           fi
 
           SHORT_SHA="${SHA:0:7}"
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
-          echo "HEAD SHA: $SHA ($SHORT_SHA)"
+          echo "Short SHA: $SHORT_SHA"
 
       - name: Check if already built
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Check if a release for this exact short SHA already exists
           HTTP=$(gh api repos/${{ github.repository }}/releases/tags/25.12-nss-${{ steps.head.outputs.short_sha }} \
             -q '.tag_name' 2>/dev/null && echo "200" || echo "404")
 
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$HTTP" = "200" ]; then
+          if [ "$HTTP" = "200" ] && [ "${{ github.event_name }}" = "schedule" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "Scheduled run: release 25.12-nss-${{ steps.head.outputs.short_sha }} already exists, skipping"
+          elif [ "$HTTP" = "200" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Release 25.12-nss-${{ steps.head.outputs.short_sha }} already exists, skipping (use force=true to rebuild)"
           else
             echo "skip=false" >> $GITHUB_OUTPUT
             [ "$HTTP" = "200" ] \
-              && echo "Manual run: will rebuild existing release 25.12-nss-${{ steps.head.outputs.short_sha }}" \
+              && echo "Force rebuild of existing release 25.12-nss-${{ steps.head.outputs.short_sha }}" \
               || echo "No release for 25.12-nss-${{ steps.head.outputs.short_sha }}, will build"
           fi
 
@@ -64,6 +82,7 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
+            -e BUILD_SHA=${{ needs.check.outputs.sha }} \
             ghcr.io/openwrt/buildbot/buildworker-v3.8.0:v9 \
             bash build-openwrt-nss.sh
 
