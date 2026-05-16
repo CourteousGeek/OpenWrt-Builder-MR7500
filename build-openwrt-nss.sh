@@ -45,9 +45,9 @@ fi
 [ -n "${BUILD_SHA}" ] && run "Checking out ${BUILD_SHA}" git checkout "${BUILD_SHA}"
 
 run "Copying workspace files"        cp -r /workspace/files ./files
-run "Copying .config"                cp /workspace/config-nss.seed ./.config
 run "Updating feeds"                 ./scripts/feeds update
 run "Installing feeds"               ./scripts/feeds install -a
+run "Copying .config"                cp /workspace/config-nss.seed ./.config
 run "Running defconfig"              make defconfig V=s
 run "Downloading sources"            make download -j$(nproc) V=s
 run "Building firmware"              make -j$(nproc) V=s
