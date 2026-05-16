@@ -1,12 +1,23 @@
-# OpenWrt Builder for Linksys MR7500
+# OpenWrt for Linksys MR7500
 
-Builds a custom OpenWrt image for the Linksys MR7500 with the AQR114C PHY firmware baked into the base squashfs. This is required for WAN to work — see [openwrt/openwrt#21835](https://github.com/openwrt/openwrt/issues/21835#issuecomment-4441365793) for the full explanation.
+Custom OpenWrt images for the Linksys MR7500 with the AQR114C PHY firmware baked into the base squashfs. This is required for WAN to work on first boot — see [openwrt/openwrt#21835](https://github.com/openwrt/openwrt/issues/21835#issuecomment-4441365793) for the full explanation.
 
-## Prerequisites
+## Releases
 
-- Docker
+Pre-built images are available on the [Releases](https://github.com/leoarry/openwrt-builder-mr7500/releases) page. Two flavours are published:
 
-## Workflow
+| Flavour | Tag format | Source | Notes |
+|---------|-----------|--------|-------|
+| **Vanilla** | `v25.12.x` | Official OpenWrt ImageBuilder | Standard OpenWrt, built with a curated package set. Stable and well-tested. |
+| **NSS** | `25.12-nss-<short-sha>` | [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) `25.12-nss` branch | Full source build with NSS hardware offloading enabled. Higher throughput for routed/NAT traffic at the cost of a longer, less stable build cycle. |
+
+Download the `*squashfs-factory.bin` file from whichever release you want and proceed to [Flash via U-Boot/TFTP](#flash-via-u-boottftp).
+
+---
+
+## Build it yourself
+
+Only needed if you want to customise packages, the config, or the baked-in AQR firmware version. Requires Docker.
 
 ### 1. Clone the repository
 
@@ -15,9 +26,9 @@ git clone https://github.com/leoarry/openwrt-builder-mr7500.git
 cd openwrt-builder-mr7500
 ```
 
-The repo includes `AQR114C.cld` pre-staged at `files/lib/firmware/marvell/`, extracted from firmware `1.1.12.216649`. Skip to step 3 unless you need a different version.
+### 2. (Optional) Extract AQR114C.cld from a different OEM firmware version
 
-### 2. (Optional) Extract AQR114C.cld from a different firmware version
+The repo includes `AQR114C.cld` pre-staged at `files/lib/firmware/marvell/`, extracted from OEM firmware `1.1.12.216649`. Skip this step unless you need a different version.
 
 Downloads the specified OEM firmware image, strips the DTB header, extracts the squashfs rootfs from the UBI image, and overwrites `files/lib/firmware/marvell/AQR114C.cld`.
 
@@ -39,7 +50,7 @@ docker run --rm `
 
 ### 3a. Build the vanilla image
 
-Downloads the OpenWrt 25.12.3 ImageBuilder, builds a factory image for `linksys_mr7500` with the firmware baked in, and places the output in `bin/25.12.3/`. Only `files/` and `bin/` are bind-mounted — the ImageBuilder runs entirely inside the container, so this works on all platforms regardless of filesystem case-sensitivity.
+Downloads the OpenWrt ImageBuilder, builds a factory image for `linksys_mr7500` with the AQR firmware baked in, and places the output in `bin/<version>/`. Only `files/` and `bin/` are bind-mounted — the ImageBuilder runs entirely inside the container, so this works on all platforms regardless of filesystem case-sensitivity.
 
 **Linux/macOS:**
 ```bash
@@ -47,7 +58,7 @@ docker run --rm \
   -v "$PWD/files:/workspace/files" \
   -v "$PWD/bin:/workspace/bin" \
   ghcr.io/leoarry/openwrt-builder-mr7500:latest \
-  ./build-openwrt.sh -v 25.12.0 -p 'luci luci-ssl-openssl kmod-batman-adv batctl-default'
+  ./build-openwrt.sh -v 25.12.3 -p 'luci luci-ssl-openssl kmod-batman-adv batctl-default'
 ```
 
 **Windows (PowerShell):**
@@ -56,14 +67,14 @@ docker run --rm `
   -v "${PWD}/files:/workspace/files" `
   -v "${PWD}/bin:/workspace/bin" `
   ghcr.io/leoarry/openwrt-builder-mr7500:latest `
-  ./build-openwrt.sh -v 25.12.0 -p 'luci luci-ssl-openssl kmod-batman-adv batctl-default'
+  ./build-openwrt.sh -v 25.12.3 -p 'luci luci-ssl-openssl kmod-batman-adv batctl-default'
 ```
 
-### 3b. (Alternative) Build with NSS offloading
+### 3b. Build the NSS image
 
-Builds from source using [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) (branch `25.12-nss`) with NSS hardware offloading enabled. This is a full source build — it takes significantly longer than the ImageBuilder path above.
+Full source build from [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) (branch `25.12-nss`) with NSS hardware offloading enabled. Takes significantly longer than the ImageBuilder path above.
 
-The build configuration is defined in `config-nss.seed`, which is copied into the repo as `.config` before the build. It includes the target device, NSS offloading options, packages, and compiler flags — edit it before running to customise what gets built.
+The build is driven by `config-nss.seed`, which is copied into the source tree as `.config` before the build starts. It contains the target device, NSS offloading options, package selection, and compiler flags — edit it before running to customise what gets built.
 
 Uses the official OpenWrt buildbot image which has all required toolchain dependencies.
 
@@ -85,7 +96,9 @@ docker run --rm `
   bash build-openwrt-nss.sh
 ```
 
-### 4. Flash via U-Boot/TFTP
+---
+
+## Flash via U-Boot/TFTP
 
 **Do not use the web UI** — `auto_recovery` will revert to OEM after 3 reboots (see [#23245](https://github.com/openwrt/openwrt/issues/23245)). Use TFTP from U-Boot and flash **both kernel partitions**.
 
