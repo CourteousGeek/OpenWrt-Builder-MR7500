@@ -178,6 +178,9 @@ CONFIG_OPENSSL_OPTIMIZE_SPEED=y
 #####################################################################
 # Enable WPA3 and Mesh support
 CONFIG_PACKAGE_wpad-mesh-openssl=y
+CONFIG_PACKAGE_kmod-batman-adv=y
+CONFIG_PACKAGE_luci-proto-batman-adv=y
+CONFIG_PACKAGE_batctl-full=y
 # Avoid using mbedTLS for consistency across packages and to avoid mixed SSL libraries.
 CONFIG_PACKAGE_wpad-basic-mbedtls=n
 
