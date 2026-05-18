@@ -51,20 +51,24 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          HTTP=$(gh api repos/${{ github.repository }}/releases/tags/25.12-nss-${{ steps.head.outputs.short_sha }} \
-            -q '.tag_name' 2>/dev/null && echo "200" || echo "404")
+          TAG="25.12-nss-${{ steps.head.outputs.short_sha }}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            RELEASE_EXISTS=true
+          else
+            RELEASE_EXISTS=false
+          fi
 
-          if [ "$HTTP" = "200" ] && [ "${{ github.event_name }}" = "schedule" ]; then
+          if [ "$RELEASE_EXISTS" = "true" ] && [ "${{ github.event_name }}" = "schedule" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Scheduled run: release 25.12-nss-${{ steps.head.outputs.short_sha }} already exists, skipping"
-          elif [ "$HTTP" = "200" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "Scheduled run: release $TAG already exists, skipping"
+          elif [ "$RELEASE_EXISTS" = "true" ] && [ "${{ inputs.force }}" != "true" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Release 25.12-nss-${{ steps.head.outputs.short_sha }} already exists, skipping (use force=true to rebuild)"
+            echo "Release $TAG already exists, skipping (use force=true to rebuild)"
           else
             echo "skip=false" >> $GITHUB_OUTPUT
-            [ "$HTTP" = "200" ] \
-              && echo "Force rebuild of existing release 25.12-nss-${{ steps.head.outputs.short_sha }}" \
-              || echo "No release for 25.12-nss-${{ steps.head.outputs.short_sha }}, will build"
+            [ "$RELEASE_EXISTS" = "true" ] \
+              && echo "Force rebuild of existing release $TAG" \
+              || echo "No release for $TAG, will build"
           fi
 
   build:
