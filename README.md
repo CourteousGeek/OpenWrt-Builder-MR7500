@@ -3,7 +3,7 @@
 Custom OpenWrt images for the Linksys MR7500 with two fixes the upstream stock images don't ship:
 
 1. **AQR114C PHY firmware baked into the base squashfs**, required for WAN to work on first boot — see [openwrt/openwrt#21835](https://github.com/openwrt/openwrt/issues/21835#issuecomment-4441365793) for the full explanation.
-2. **ath11k `qcom,ath11k-fw-memory-mode` pinned on both wifi nodes** (not just the AHB-attached 2.4/5 GHz radio as upstream does), so the PCIe QCN9074 6 GHz radio doesn't fall back to the driver default 1 GB profile and leak ~40 MB of carveout on a 512 MB router.
+2. **ath11k `qcom,ath11k-fw-memory-mode` pinned on both wifi nodes, plus a matching `q6_region` carveout size**, so the PCIe QCN9074 6 GHz radio doesn't fall back to the driver default 1 GB profile and reserve 85 MB on a 512 MB router.
 
 ## Releases
 
@@ -20,11 +20,11 @@ Each release ships **six binaries** for the MR7500 — a `*-squashfs-factory.bin
 
 | fwmode | Profile | Peers / vdevs per radio | When to use it |
 |---|---|---|---|
-| `fwmode0` | ~1 GB | 512 / 17 | Avoid. This is the ath11k driver default; on a 512 MB MR7500 it pins ~85 MB of host‑firmware carveout to the QCN9074 6 GHz radio alone — wasteful and not what you want. |
-| **`fwmode1`** | **512 MB** | **128 / 8** | **Recommended.** Matches the MR7500's 512 MB DDR3L. Frees ~40 MB vs mode 0 with no practical loss — 128 stations × 8 vdevs is far more than residential traffic ever needs. |
-| `fwmode2` | 256 MB | 128 / 8 | Experimental. Same peer/vdev limits as mode 1 but with coldboot calibration disabled. Saves another ~20 MB; the 6 GHz radio (QCN9074) may fail to come up because this configuration has not been validated upstream. Useful for RAM profiling only. |
+| `fwmode0` | ~1 GB | 512 / 17 | Avoid. This is the ath11k driver default; on a 512 MB MR7500 it reserves the full 85 MB QCN9074 host‑firmware carveout — wasteful and not what you want. |
+| **`fwmode1`** | **512 MB** | **128 / 8** | **Recommended.** Matches the MR7500's 512 MB DDR3L and shrinks `q6_region` from 85 MB to 55 MB. 128 stations × 8 vdevs is far more than residential traffic ever needs. |
+| `fwmode2` | 256 MB | 128 / 8 | Experimental. Same peer/vdev limits as mode 1 but shrinks `q6_region` to 32 MB and disables coldboot calibration. The 6 GHz radio (QCN9074) may fail to come up because this configuration has not been validated upstream. Useful for RAM profiling only. |
 
-Both wifi nodes (AHB IPQ6018 2.4/5 GHz + PCIe QCN9074 6 GHz) are pinned to the same mode in every artifact. Upstream OpenWrt only pins the AHB node — see the MR7500 DTS added in [openwrt/openwrt a1bf306](https://lists.infradead.org/pipermail/lede-commits/2025-March/024785.html) — which is why stock images leak the 6 GHz carveout.
+Both wifi nodes (AHB IPQ6018 2.4/5 GHz + PCIe QCN9074 6 GHz) are pinned to the same mode in every artifact, and the `q6_region` reserved-memory block is resized to match. Upstream OpenWrt only pins the AHB node — see the MR7500 DTS added in [openwrt/openwrt a1bf306](https://lists.infradead.org/pipermail/lede-commits/2025-March/024785.html) — which is why stock images keep the 6 GHz carveout at the larger profile.
 
 Useful background:
 
