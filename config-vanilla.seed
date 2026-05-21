@@ -1,0 +1,60 @@
+# vi: set syntax=make:
+#
+# OpenWrt config seed for full-source vanilla builds of the Linksys MR7500.
+#
+# This mirrors the package set that build-openwrt.sh (ImageBuilder) passes via
+# its -p flag. The seed exists because the CI matrix patches the device tree
+# (ath11k fw-memory-mode) before the kernel is compiled -- something the
+# ImageBuilder path can't do, since it ships a pre-compiled kernel/DTB.
+#
+# For quick local builds without fwmode variations, prefer build-openwrt.sh.
+#
+# Usage (same flow as config-nss.seed):
+#   cp config-vanilla.seed openwrt/.config
+#   make defconfig V=s
+#   make -j$(nproc) V=s
+
+#####################################################################
+# Target platform / device
+#####################################################################
+CONFIG_TARGET_qualcommax=y
+CONFIG_TARGET_qualcommax_ipq60xx=y
+CONFIG_TARGET_qualcommax_ipq60xx_DEVICE_linksys_mr7500=y
+
+#####################################################################
+# Wireless: WPA3 + mesh via OpenSSL (matches build-openwrt.sh -p)
+#####################################################################
+# CONFIG_PACKAGE_wpad-basic-mbedtls is not set
+CONFIG_PACKAGE_wpad-mesh-openssl=y
+CONFIG_PACKAGE_kmod-batman-adv=y
+CONFIG_PACKAGE_luci-proto-batman-adv=y
+CONFIG_PACKAGE_batctl-full=y
+
+#####################################################################
+# LuCI
+#####################################################################
+CONFIG_PACKAGE_luci=y
+CONFIG_PACKAGE_luci-ssl-openssl=y
+
+#####################################################################
+# VRRP / conntrack sync
+#####################################################################
+CONFIG_PACKAGE_keepalived=y
+CONFIG_PACKAGE_keepalived-sync=y
+CONFIG_PACKAGE_luci-app-keepalived=y
+CONFIG_PACKAGE_conntrackd=y
+
+#####################################################################
+# Diagnostics / utilities
+#####################################################################
+CONFIG_PACKAGE_rsync=y
+CONFIG_PACKAGE_jq=y
+CONFIG_PACKAGE_pigz=y
+CONFIG_PACKAGE_tar=y
+CONFIG_PACKAGE_iperf3=y
+CONFIG_PACKAGE_tcpdump=y
+
+#####################################################################
+# Build speedups
+#####################################################################
+CONFIG_CCACHE=y

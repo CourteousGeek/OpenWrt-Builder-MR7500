@@ -1,21 +1,24 @@
 #!/bin/bash
-# Build OpenWrt NSS firmware (qosmio/openwrt-ipq) for the Linksys MR7500 with
-# a specific ath11k fw-memory-mode pinned on both radios.
+# Full-source build of vanilla OpenWrt for the Linksys MR7500 with a specific
+# ath11k fw-memory-mode pinned on both radios.
+#
+# This is a heavier alternative to build-openwrt.sh (ImageBuilder). It exists
+# because ImageBuilder ships a pre-compiled kernel/DTB and so cannot patch the
+# device tree -- which is what changes fw-memory-mode at boot. The vanilla CI
+# matrix builds three variants (modes 0/1/2) per release; this script builds
+# one of them.
 #
 # Env vars:
-#   FWMODE     - ath11k fw-memory-mode 0|1|2 (default: 1)
-#                  0 = ~1 GB profile (driver default, no DT override needed)
-#                  1 = 512 MB profile (matches MR7500 RAM)
-#                  2 = 256 MB profile (coldboot calibration disabled)
-#   BUILD_SHA  - qosmio/openwrt-ipq commit to build (default: HEAD of branch)
+#   FWMODE   - ath11k fw-memory-mode 0|1|2 (default: 1)
+#   VERSION  - OpenWrt release version, e.g. 25.12.3 (required)
 
 set -e
 
-REPO_URL="https://github.com/qosmio/openwrt-ipq.git"
-REPO_BRANCH="25.12-nss"
-REPO_DIR="openwrt-ipq"
+REPO_URL="https://github.com/openwrt/openwrt.git"
+REPO_DIR="openwrt"
 FWMODE="${FWMODE:-1}"
-LOG_FILE=$(mktemp /tmp/build-nss-XXXXXX.log)
+VERSION="${VERSION:-}"
+LOG_FILE=$(mktemp /tmp/build-vanilla-XXXXXX.log)
 
 case "${FWMODE}" in
     0|1|2) ;;
@@ -24,7 +27,12 @@ case "${FWMODE}" in
         ;;
 esac
 
-trap 'rc=$?; if [ $rc -ne 0 ]; then echo ""; echo "=== Build failed — last 100 lines of output ==="; tail -n 100 "${LOG_FILE}"; fi; rm -f "${LOG_FILE}"' EXIT
+if [ -z "${VERSION}" ]; then
+    echo "ERROR: VERSION is required (e.g. VERSION=25.12.3)" >&2
+    exit 2
+fi
+
+trap 'rc=$?; if [ $rc -ne 0 ]; then echo ""; echo "=== Build failed -- last 100 lines of output ==="; tail -n 100 "${LOG_FILE}"; fi; rm -f "${LOG_FILE}"' EXIT
 
 run() {
     local desc="$1"; shift
@@ -37,34 +45,27 @@ run() {
     fi
 }
 
-echo "Building OpenWrt NSS for Linksys MR7500 (fwmode=${FWMODE})"
-[ -n "${BUILD_SHA}" ] && echo "Target SHA: ${BUILD_SHA}" || echo "Target: HEAD of ${REPO_BRANCH}"
+echo "Building vanilla OpenWrt ${VERSION} for Linksys MR7500 (fwmode=${FWMODE})"
 echo ""
 
 mkdir -p /builder
 cd /builder
 
+TAG="v${VERSION}"
 if [ ! -d "${REPO_DIR}" ]; then
-    if [ -n "${BUILD_SHA}" ]; then
-        run "Cloning repository (full history for SHA checkout)" \
-            git clone --branch "${REPO_BRANCH}" "${REPO_URL}" "${REPO_DIR}"
-    else
-        run "Cloning repository" \
-            git clone --branch "${REPO_BRANCH}" --depth 1 "${REPO_URL}" "${REPO_DIR}"
-    fi
+    run "Cloning openwrt/openwrt @ ${TAG}" \
+        git clone --depth 1 --branch "${TAG}" "${REPO_URL}" "${REPO_DIR}"
     cd "${REPO_DIR}"
 else
-    run "Fetching latest" git -C "${REPO_DIR}" fetch origin "${REPO_BRANCH}"
     cd "${REPO_DIR}"
-    [ -z "${BUILD_SHA}" ] && run "Updating to latest" git checkout FETCH_HEAD
+    run "Fetching ${TAG}"      git fetch --depth 1 origin "tag" "${TAG}"
+    run "Checking out ${TAG}"  git checkout "tags/${TAG}"
 fi
 
-[ -n "${BUILD_SHA}" ] && run "Checking out ${BUILD_SHA}" git checkout "${BUILD_SHA}"
-
 run "Copying workspace files"        cp -r /workspace/files ./files
-run "Updating feeds"                 ./scripts/feeds update
+run "Updating feeds"                 ./scripts/feeds update -a
 run "Installing feeds"               ./scripts/feeds install -a
-run "Copying .config"                cp /workspace/config-nss.seed ./.config
+run "Copying .config"                cp /workspace/config-vanilla.seed ./.config
 run "Patching DTS fw-memory-mode=${FWMODE}" \
     python3 /workspace/scripts/apply-fwmode.py \
         --mode "${FWMODE}" \
@@ -75,7 +76,7 @@ run "Building firmware"              make -j"$(nproc)" V=s
 
 # Stage outputs with the fwmode embedded in each filename so all three
 # matrix artifacts can sit in one bin/ directory without colliding.
-DEST="/workspace/bin/fwmode${FWMODE}"
+DEST="/workspace/bin/${VERSION}/fwmode${FWMODE}"
 run "Staging outputs to ${DEST}" bash -c '
     set -e
     mkdir -p "'"${DEST}"'"
