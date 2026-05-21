@@ -37,7 +37,7 @@ CAL_VARIANT_RE = re.compile(
 )
 
 
-def _find_pcie_wifi_block(text: str) -> re.Match | None:
+def _find_pcie_wifi_block(text: str):
     """Return the wifi@N,M block inside &pcie0, not any other wifi node."""
     pcie_start = text.find('&pcie0')
     if pcie_start == -1:
