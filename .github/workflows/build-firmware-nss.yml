@@ -77,45 +77,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        fwmode: [0, 1, 2]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build NSS firmware (fwmode=${{ matrix.fwmode }})
+      - name: Build NSS firmware
         run: |
           mkdir -p bin && chmod 777 bin
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
             -e BUILD_SHA=${{ needs.check.outputs.sha }} \
-            -e FWMODE=${{ matrix.fwmode }} \
             ghcr.io/openwrt/buildbot/buildworker-v3.8.0:v9 \
             bash build-openwrt-nss.sh
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mr7500-nss-fwmode${{ matrix.fwmode }}
-          path: bin/fwmode${{ matrix.fwmode }}/*
-          if-no-files-found: error
-
-  release:
-    needs: [check, build]
-    if: needs.check.outputs.skip == 'false'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: bin
-          pattern: mr7500-nss-fwmode*
-          merge-multiple: true
-
-      - name: List collected artifacts
-        run: ls -la bin/
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
@@ -125,23 +98,13 @@ jobs:
           body: |
             Automated NSS build from [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) branch `25.12-nss`.
 
-            Three variants are built per release, one per ath11k firmware memory mode.
-            Both the AHB-attached 2.4/5 GHz radios and the PCIe QCN9074 6 GHz radio are
-            pinned to the same mode, with the QCN9074 reserved-memory carveout resized:
-
-            | fwmode | Profile  | QCN9074 carveout | Peers / vdevs per radio | Notes                                       |
-            |--------|----------|------------------|-------------------------|---------------------------------------------|
-            | 0      | ~1 GB    | 85 MB            | 512 / 17                | ath11k driver default                       |
-            | 1      | 512 MB   | 55 MB            | 128 / 8                 | recommended                                 |
-            | 2      | 256 MB   | 32 MB            | 128 / 8                 | coldboot calibration disabled; experimental |
-
-            Each variant ships both a `*-fwmodeN-squashfs-factory.bin` (fresh install via
-            U-Boot/TFTP) and a `*-fwmodeN-squashfs-sysupgrade.bin` (sysupgrade from a
-            running OpenWrt).
+            Includes a device-tree patch that pins the QCN9074 6 GHz radio to ath11k
+            firmware memory mode 1 and shrinks the `q6_region` carveout from 85 MB to
+            55 MB (~30 MB more usable RAM on the 512 MB MR7500).
 
             The AQR114C PHY firmware is baked into the base squashfs so WAN works on first boot.
             See the [README](https://github.com/${{ github.repository }}#4-flash-via-u-boottftp) for flashing instructions.
 
             Source SHA: ${{ needs.check.outputs.sha }}
-          files: bin/*
+          files: bin/*mr7500*
           fail_on_unmatched_files: true

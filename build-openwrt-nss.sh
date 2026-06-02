@@ -1,28 +1,11 @@
 #!/bin/bash
-# Build OpenWrt NSS firmware (qosmio/openwrt-ipq) for the Linksys MR7500 with
-# a specific ath11k fw-memory-mode pinned on both radios.
-#
-# Env vars:
-#   FWMODE     - ath11k fw-memory-mode 0|1|2 (default: 1)
-#                  0 = ~1 GB profile (driver default, no DT override needed)
-#                  1 = 512 MB profile (matches MR7500 RAM)
-#                  2 = 256 MB profile (coldboot calibration disabled)
-#   BUILD_SHA  - qosmio/openwrt-ipq commit to build (default: HEAD of branch)
 
 set -e
 
 REPO_URL="https://github.com/qosmio/openwrt-ipq.git"
 REPO_BRANCH="25.12-nss"
 REPO_DIR="openwrt-ipq"
-FWMODE="${FWMODE:-1}"
 LOG_FILE=$(mktemp /tmp/build-nss-XXXXXX.log)
-
-case "${FWMODE}" in
-    0|1|2) ;;
-    *)  echo "ERROR: invalid FWMODE='${FWMODE}' (must be 0, 1, or 2)" >&2
-        exit 2
-        ;;
-esac
 
 trap 'rc=$?; if [ $rc -ne 0 ]; then echo ""; echo "=== Build failed — last 100 lines of output ==="; tail -n 100 "${LOG_FILE}"; fi; rm -f "${LOG_FILE}"' EXIT
 
@@ -37,7 +20,7 @@ run() {
     fi
 }
 
-echo "Building OpenWrt NSS for Linksys MR7500 (fwmode=${FWMODE})"
+echo "Building OpenWrt NSS for Linksys MR7500"
 [ -n "${BUILD_SHA}" ] && echo "Target SHA: ${BUILD_SHA}" || echo "Target: HEAD of ${REPO_BRANCH}"
 echo ""
 
@@ -65,32 +48,13 @@ run "Copying workspace files"        cp -r /workspace/files ./files
 run "Updating feeds"                 ./scripts/feeds update
 run "Installing feeds"               ./scripts/feeds install -a
 run "Copying .config"                cp /workspace/config-nss.seed ./.config
-run "Patching DTS fw-memory-mode=${FWMODE}" \
-    python3 /workspace/scripts/apply-fwmode.py \
-        --mode "${FWMODE}" \
-        --dts target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq6018-mr7500.dts
+run "Patching MR7500 QCN9074 DTS"    patch -p1 < /workspace/patches/ipq6018-mr7500-qcn9074-512m.patch
 run "Running defconfig"              make defconfig V=s
-run "Downloading sources"            make download -j"$(nproc)" V=s
-run "Building firmware"              make -j"$(nproc)" V=s
-
-# Stage outputs with the fwmode embedded in each filename so all three
-# matrix artifacts can sit in one bin/ directory without colliding.
-DEST="/workspace/bin/fwmode${FWMODE}"
-run "Staging outputs to ${DEST}" bash -c '
-    set -e
-    mkdir -p "'"${DEST}"'"
-    shopt -s nullglob
-    for f in ./bin/targets/qualcommax/ipq60xx/*mr7500*; do
-        base=$(basename "$f")
-        if [[ "$base" == *-squashfs-* ]]; then
-            newname="${base/-squashfs-/-fwmode'"${FWMODE}"'-squashfs-}"
-        else
-            newname="fwmode'"${FWMODE}"'-$base"
-        fi
-        cp "$f" "'"${DEST}"'/$newname"
-    done
-'
+run "Downloading sources"            make download -j$(nproc) V=s
+run "Building firmware"              make -j$(nproc) V=s
+run "Copying output to /workspace/bin" \
+    bash -c 'mkdir -p /workspace/bin && cp -r ./bin/targets/qualcommax/ipq60xx/*mr7500* /workspace/bin'
 
 echo ""
-echo "Build complete! Images for fwmode=${FWMODE} are in: ${DEST}/"
-ls -la "${DEST}/"
+echo "Build complete! Images are in: /workspace/bin/"
+ls -la /workspace/bin/
