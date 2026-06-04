@@ -3,7 +3,7 @@
 Custom OpenWrt images for the Linksys MR7500 with fixes the upstream stock images don't ship:
 
 1. **AQR114C PHY firmware baked into the base squashfs**, required for WAN to work on first boot — see [openwrt/openwrt#21835](https://github.com/openwrt/openwrt/issues/21835#issuecomment-4441365793).
-2. **NSS builds only:** a device-tree patch that pins the QCN9074 6 GHz radio to ath11k firmware memory mode 1 and shrinks the `q6_region` carveout from 85 MB to 55 MB (~30 MB more usable RAM on the 512 MB MR7500).
+2. **NSS builds only:** a device-tree patch that pins the QCN9074 6 GHz PCIe radio to ath11k firmware memory mode 1 (upstream only sets this on the AHB 2.4/5 GHz radio), reducing runtime host-memory preallocation for the 6 GHz radio.
 
 ## Releases
 
@@ -16,12 +16,11 @@ Pre-built images are on the [Releases](https://github.com/leoarry/openwrt-builde
 
 ### QCN9074 RAM fix (NSS builds)
 
-Upstream OpenWrt sets `qcom,ath11k-fw-memory-mode = <1>` on the AHB 2.4/5 GHz radio only. The PCIe QCN9074 6 GHz radio falls back to mode 0 and keeps an 85 MB DT reserved-memory carveout on a 512 MB router. NSS builds apply [`patches/ipq6018-mr7500-qcn9074-512m.patch`](patches/ipq6018-mr7500-qcn9074-512m.patch), which:
+Upstream OpenWrt sets `qcom,ath11k-fw-memory-mode = <1>` on the AHB 2.4/5 GHz radio only. The PCIe QCN9074 6 GHz radio has no fwmode in DTS and the driver defaults to mode 0, which preallocates more host memory at runtime. The `q6_region` DT carveout (55 MB) is already provided by `ipq6018-512m.dtsi` in both upstream and qosmio — this patch does not change it.
 
-- pins mode 1 on the QCN9074 PCIe node
-- shrinks `q6_region` to `0x3700000` (55 MB)
+NSS builds apply [`patches/ipq6018-mr7500-qcn9074-512m.patch`](patches/ipq6018-mr7500-qcn9074-512m.patch), which adds one line: `qcom,ath11k-fw-memory-mode = <1>` on the QCN9074 PCIe node (`wifi@0,0`).
 
-Validated on hardware: +30 MiB MemTotal, 6 GHz radio still up at 160 MHz.
+Validated on hardware: measurably more free RAM at idle (e.g. ~114 MB → ~137 MB), 6 GHz radio still up at 160 MHz.
 
 Background: [openwrt/openwrt#19083](https://github.com/openwrt/openwrt/pull/19083), [MR7500 DTS upstreaming](https://lists.infradead.org/pipermail/lede-commits/2025-March/024785.html).
 

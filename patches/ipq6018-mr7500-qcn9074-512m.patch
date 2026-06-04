@@ -8,12 +8,3 @@
  		};
  	};
  };
-@@ -537,4 +538,8 @@
- 	status = "okay";
- 	qcom,ath11k-calibration-variant = "Linksys-MR7500";
- 	qcom,ath11k-fw-memory-mode = <1>;
- };
-+
-+&q6_region {
-+	reg = <0x0 0x4ab00000 0x0 0x3700000>;
-+};
