@@ -1,17 +1,30 @@
 # OpenWrt for Linksys MR7500
 
-Custom OpenWrt images for the Linksys MR7500 with the AQR114C PHY firmware baked into the base squashfs. This is required for WAN to work on first boot — see [openwrt/openwrt#21835](https://github.com/openwrt/openwrt/issues/21835#issuecomment-4441365793) for the full explanation.
+Custom OpenWrt images for the Linksys MR7500 with fixes the upstream stock images don't ship:
+
+1. **AQR114C PHY firmware baked into the base squashfs**, required for WAN to work on first boot — see [openwrt/openwrt#21835](https://github.com/openwrt/openwrt/issues/21835#issuecomment-4441365793).
+2. **NSS builds only:** a device-tree patch that pins the QCN9074 6 GHz PCIe radio to ath11k firmware memory mode 1 (upstream only sets this on the AHB 2.4/5 GHz radio), reducing runtime host-memory preallocation for the 6 GHz radio.
 
 ## Releases
 
-Pre-built images are available on the [Releases](https://github.com/leoarry/openwrt-builder-mr7500/releases) page. Two flavours are published:
+Pre-built images are on the [Releases](https://github.com/leoarry/openwrt-builder-mr7500/releases) page:
 
 | Flavour | Tag format | Source | Notes |
 |---------|-----------|--------|-------|
-| **Vanilla** | `v25.12.x` | Official OpenWrt ImageBuilder | Standard OpenWrt, built with a curated package set. Stable and well-tested. |
-| **NSS** | `25.12-nss-<short-sha>` | [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) `25.12-nss` branch | Full source build with NSS hardware offloading enabled. Higher throughput for routed/NAT traffic at the cost of a longer, less stable build cycle. |
+| **Vanilla** | `v25.12.x` | Official OpenWrt ImageBuilder | Standard OpenWrt with a curated package set. Stable and well-tested. |
+| **NSS** | `25.12-nss-<short-sha>` | [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) `25.12-nss` branch | NSS hardware offloading plus the QCN9074 RAM fix above. |
 
-Download the `*squashfs-factory.bin` file from whichever release you want and proceed to [Flash via U-Boot/TFTP](#flash-via-u-boottftp).
+### QCN9074 RAM fix (NSS builds)
+
+Upstream OpenWrt sets `qcom,ath11k-fw-memory-mode = <1>` on the AHB 2.4/5 GHz radio only. The PCIe QCN9074 6 GHz radio has no fwmode in DTS and the driver defaults to mode 0, which preallocates more host memory at runtime. The `q6_region` DT carveout (55 MB) is already provided by `ipq6018-512m.dtsi` in both upstream and qosmio — this patch does not change it.
+
+NSS builds apply [`patches/ipq6018-mr7500-qcn9074-512m.patch`](patches/ipq6018-mr7500-qcn9074-512m.patch), which adds one line: `qcom,ath11k-fw-memory-mode = <1>` on the QCN9074 PCIe node (`wifi@0,0`).
+
+Validated on hardware: measurably more free RAM at idle (e.g. ~114 MB → ~137 MB), 6 GHz radio still up at 160 MHz.
+
+Background: [openwrt/openwrt#19083](https://github.com/openwrt/openwrt/pull/19083), [MR7500 DTS upstreaming](https://lists.infradead.org/pipermail/lede-commits/2025-March/024785.html).
+
+Download `*squashfs-factory.bin` from whichever release you want and proceed to [Flash via U-Boot/TFTP](#flash-via-u-boottftp).
 
 ---
 
@@ -72,7 +85,7 @@ docker run --rm `
 
 ### 3b. Build the NSS image
 
-Full source build from [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) (branch `25.12-nss`) with NSS hardware offloading enabled. Takes significantly longer than the ImageBuilder path above.
+Full source build from [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) (branch `25.12-nss`) with NSS hardware offloading enabled. Applies the QCN9074 device-tree patch before compiling. Takes significantly longer than the ImageBuilder path above.
 
 The build is driven by `config-nss.seed`, which is copied into the source tree as `.config` before the build starts. It contains the target device, NSS offloading options, package selection, and compiler flags — edit it before running to customise what gets built.
 

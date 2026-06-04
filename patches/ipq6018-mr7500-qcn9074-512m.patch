@@ -1,0 +1,10 @@
+--- a/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq6018-mr7500.dts
++++ b/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq6018-mr7500.dts
+@@ -529,6 +529,7 @@
+ 			compatible = "pci17cb,1104";
+ 			reg = <0x00010000 0 0 0 0>;
+ 			qcom,ath11k-calibration-variant = "Linksys-MR7500";
++			qcom,ath11k-fw-memory-mode = <1>;
+ 		};
+ 	};
+ };

@@ -98,6 +98,10 @@ jobs:
           body: |
             Automated NSS build from [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) branch `25.12-nss`.
 
+            Includes a device-tree patch that pins the QCN9074 6 GHz PCIe radio to
+            ath11k firmware memory mode 1 (reduces runtime host-memory preallocation;
+            `q6_region` is already 55 MB via ipq6018-512m.dtsi).
+
             The AQR114C PHY firmware is baked into the base squashfs so WAN works on first boot.
             See the [README](https://github.com/${{ github.repository }}#4-flash-via-u-boottftp) for flashing instructions.
 

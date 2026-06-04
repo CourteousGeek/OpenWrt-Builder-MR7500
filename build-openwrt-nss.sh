@@ -48,6 +48,7 @@ run "Copying workspace files"        cp -r /workspace/files ./files
 run "Updating feeds"                 ./scripts/feeds update
 run "Installing feeds"               ./scripts/feeds install -a
 run "Copying .config"                cp /workspace/config-nss.seed ./.config
+run "Patching MR7500 QCN9074 DTS"    patch -p1 < /workspace/patches/ipq6018-mr7500-qcn9074-512m.patch
 run "Running defconfig"              make defconfig V=s
 run "Downloading sources"            make download -j$(nproc) V=s
 run "Building firmware"              make -j$(nproc) V=s
