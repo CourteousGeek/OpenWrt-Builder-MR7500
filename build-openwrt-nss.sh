@@ -7,7 +7,7 @@ REPO_BRANCH="25.12-nss"
 REPO_DIR="openwrt-ipq"
 LOG_FILE=$(mktemp /tmp/build-nss-XXXXXX.log)
 
-trap 'rc=$?; if [ $rc -ne 0 ]; then cp "${LOG_FILE}" /workspace/bin/build-nss-failure.log; echo ""; echo "=== Build failed — failing targets ==="; grep -E "\*\*\*.*Error" "${LOG_FILE}" | tail -n 20; echo ""; echo "=== Build failed — last 150 lines ==="; tail -n 150 "${LOG_FILE}"; fi; rm -f "${LOG_FILE}"' EXIT
+trap 'rc=$?; if [ $rc -ne 0 ]; then echo ""; echo "=== Build failed — failing targets ==="; grep -E "\*\*\*.*Error" "${LOG_FILE}" | tail -n 20; echo ""; echo "=== Build failed — last 150 lines ==="; tail -n 150 "${LOG_FILE}"; fi; rm -f "${LOG_FILE}"' EXIT
 
 run() {
     local desc="$1"; shift

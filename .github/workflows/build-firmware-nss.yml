@@ -90,14 +90,6 @@ jobs:
             ghcr.io/openwrt/buildbot/buildworker-v3.8.0:v9 \
             bash build-openwrt-nss.sh
 
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-nss-failure-log
-          path: bin/build-nss-failure.log
-          if-no-files-found: ignore
-
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
