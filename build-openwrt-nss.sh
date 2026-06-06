@@ -44,10 +44,6 @@ fi
 
 [ -n "${BUILD_SHA}" ] && run "Checking out ${BUILD_SHA}" git checkout "${BUILD_SHA}"
 
-run "HEAD BROKEN AT Commit 72c0e5b - Temporary fixing truncated function name in AP_VLAN NSS patch" \
-    sed -i \
-        -e 's/ath11k_he_gi_to_nl8021$/ath11k_he_gi_to_nl80211/' \
-        package/kernel/mac80211/patches/nss/ath11k/235-003-ath11k-add-AP_VLAN-vif-support-for-WDS-offload-in-NSS-offload.patch
 run "Copying workspace files"        cp -r /workspace/files ./files
 run "Updating feeds"                 ./scripts/feeds update
 run "Installing feeds"               ./scripts/feeds install -a
