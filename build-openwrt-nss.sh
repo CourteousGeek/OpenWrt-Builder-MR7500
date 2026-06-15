@@ -39,10 +39,10 @@ if [ ! -d "${REPO_DIR}" ]; then
 else
     run "Fetching latest" git -C "${REPO_DIR}" fetch origin "${REPO_BRANCH}"
     cd "${REPO_DIR}"
-    [ -z "${BUILD_SHA}" ] && run "Updating to latest" git checkout FETCH_HEAD
+    [ -z "${BUILD_SHA}" ] && run "Updating to latest" git reset --hard FETCH_HEAD
 fi
 
-[ -n "${BUILD_SHA}" ] && run "Checking out ${BUILD_SHA}" git checkout "${BUILD_SHA}"
+[ -n "${BUILD_SHA}" ] && run "Checking out ${BUILD_SHA}" git reset --hard "${BUILD_SHA}"
 
 run "Copying workspace files"        cp -r /workspace/files ./files
 run "Updating feeds"                 ./scripts/feeds update
