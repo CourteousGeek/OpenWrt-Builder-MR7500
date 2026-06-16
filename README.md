@@ -3,7 +3,8 @@
 Custom OpenWrt images for the Linksys MR7500 with fixes the upstream stock images don't ship:
 
 1. **AQR114C PHY firmware baked into the base squashfs**, required for WAN to work on first boot — see [openwrt/openwrt#21835](https://github.com/openwrt/openwrt/issues/21835#issuecomment-4441365793).
-2. **NSS builds only:** a device-tree patch that pins the QCN9074 6 GHz PCIe radio to ath11k firmware memory mode 1 (upstream only sets this on the AHB 2.4/5 GHz radio), reducing runtime host-memory preallocation for the 6 GHz radio.
+2. **Kernel PHY patches** that make the WAN link reliable: C45 PHY detection/driver-bind fixes plus an AQR114C USXGMII system-interface fix that resolves the 2.5G WAN packet loss (see below).
+3. **NSS builds only:** a device-tree patch that pins the QCN9074 6 GHz PCIe radio to ath11k firmware memory mode 1 (upstream only sets this on the AHB 2.4/5 GHz radio), reducing runtime host-memory preallocation for the 6 GHz radio.
 
 ## Releases
 
@@ -14,13 +15,19 @@ Pre-built images are on the [Releases](https://github.com/leoarry/openwrt-builde
 | **Vanilla** | `v25.12.x` | Official OpenWrt ImageBuilder | Standard OpenWrt with a curated package set. Stable and well-tested. |
 | **NSS** | `25.12-nss-<short-sha>` | [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) `25.12-nss` branch | NSS hardware offloading plus the AQR114C WAN and QCN9074 RAM fixes above. |
 
-### 2.5G WAN packet loss — AQR firmware (NSS builds)
+### WAN reliability — kernel PHY patches
 
-On the MR7500 the WAN port (Aquantia AQR114C, USXGMII) is **clean at 1G but drops ~10–20% of packets at 2.5G**, with zero error counters.
+Out of the box the MR7500 WAN (Aquantia AQR114C, USXGMII) is unreliable: the aquantia driver may not bind to the Clause-45 PHY (link issues at any speed), and even when it does, the port **drops ~10–20% of packets at 2.5G** with zero error counters.
 
-Ruled out on hardware (via `mdio` register reads): it is **not** the interface type (PHYXS `4.E812` shows USXGMII at both 1G and 2.5G), **not** the GMAC/XGMAC width (port 5 is XGMAC at all speeds), and **not** the `uniphy autoneg time out!` message (that poll is non-fatal). So the cause is not on the MAC/ssdk side that those would touch.
+This build applies three kernel patches in [`patches/kernel/`](patches/kernel/), copied into `target/linux/qualcommax/patches-6.12/` at build time:
 
-The likely cause is the **AQR114C firmware (`.cld`) provisioning.** The MR7500 OEM firmware bundles a **2021** build (`AQR114C.cld`), but the supported **MX8500** OpenWrt board — same AQR114C — loads a **2024** build (`AQR-G4_v5.6.5-…VER24005.cld`) and works. This build therefore bakes the **2024** firmware as `AQR114C.cld` (the name the MR7500 DTS loads). The 2021 OEM build can still be re-extracted with `extract-aqr-firmware.sh` if needed.
+| Patch | What it does |
+|-------|--------------|
+| `0990` | Retry Clause-45 PHY detection in `fwnode_mdio` (the AQR can be slow to answer ID reads after reset) |
+| `0991` | Late C45 driver-module request in `phy_device` so the aquantia driver binds instead of generic Clause-45 |
+| `0992` | **The 2.5G fix:** switch the AQR114C `config_aneg` to `aqr_config_aneg_set_prot`, which programs the system-interface protocol per speed so 2.5G USXGMII is set up correctly |
+
+`0992` is the one that eliminates the 2.5G packet loss; `0990`/`0991` ensure the aquantia driver actually drives the PHY. They use the high `099x` range so they apply after upstream patches and don't collide with qosmio's `09xx` numbering. Verified on hardware: clean 0% loss at both 1G and 2.5G.
 
 ### QCN9074 RAM fix (NSS builds)
 
@@ -49,7 +56,7 @@ cd openwrt-builder-mr7500
 
 ### 2. (Optional) Extract AQR114C.cld from a different OEM firmware version
 
-The repo includes `AQR114C.cld` pre-staged at `files/lib/firmware/marvell/`. It is the **2024** `VER24005` AQR-G4 build (the one the supported MX8500 OpenWrt board uses), baked under the name the MR7500 DTS loads. To instead extract the older 2021 build from OEM firmware, use `extract-aqr-firmware.sh` (see below).
+The repo includes `AQR114C.cld` pre-staged at `files/lib/firmware/marvell/`, extracted from OEM firmware `1.1.12.216649`. Skip this step unless you need a different version.
 
 Downloads the specified OEM firmware image, strips the DTB header, extracts the squashfs rootfs from the UBI image, and overwrites `files/lib/firmware/marvell/AQR114C.cld`.
 
