@@ -39,18 +39,16 @@ if [ ! -d "${REPO_DIR}" ]; then
 else
     run "Fetching latest" git -C "${REPO_DIR}" fetch origin "${REPO_BRANCH}"
     cd "${REPO_DIR}"
-    [ -z "${BUILD_SHA}" ] && run "Updating to latest" git reset --hard FETCH_HEAD
+    [ -z "${BUILD_SHA}" ] && run "Updating to latest" git checkout FETCH_HEAD
 fi
 
-[ -n "${BUILD_SHA}" ] && run "Checking out ${BUILD_SHA}" git reset --hard "${BUILD_SHA}"
+[ -n "${BUILD_SHA}" ] && run "Checking out ${BUILD_SHA}" git checkout "${BUILD_SHA}"
 
 run "Copying workspace files"        cp -r /workspace/files ./files
 run "Updating feeds"                 ./scripts/feeds update
 run "Installing feeds"               ./scripts/feeds install -a
 run "Copying .config"                cp /workspace/config-nss.seed ./.config
 run "Patching MR7500 QCN9074 DTS"    patch -p1 < /workspace/patches/ipq6018-mr7500-qcn9074-512m.patch
-run "Adding kernel PHY patches" \
-    bash -c 'cp /workspace/patches/kernel/*.patch ./target/linux/qualcommax/patches-6.12/'
 run "Running defconfig"              make defconfig V=s
 run "Downloading sources"            make download -j$(nproc) V=s
 run "Building firmware"              make -j$(nproc) V=s

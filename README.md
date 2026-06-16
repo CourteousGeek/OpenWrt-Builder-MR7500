@@ -3,8 +3,7 @@
 Custom OpenWrt images for the Linksys MR7500 with fixes the upstream stock images don't ship:
 
 1. **AQR114C PHY firmware baked into the base squashfs**, required for WAN to work on first boot — see [openwrt/openwrt#21835](https://github.com/openwrt/openwrt/issues/21835#issuecomment-4441365793).
-2. **Kernel PHY patches** that make the WAN link reliable: C45 PHY detection/driver-bind fixes plus an AQR114C USXGMII system-interface fix that resolves the 2.5G WAN packet loss (see below).
-3. **NSS builds only:** a device-tree patch that pins the QCN9074 6 GHz PCIe radio to ath11k firmware memory mode 1 (upstream only sets this on the AHB 2.4/5 GHz radio), reducing runtime host-memory preallocation for the 6 GHz radio.
+2. **NSS builds only:** a device-tree patch that pins the QCN9074 6 GHz PCIe radio to ath11k firmware memory mode 1 (upstream only sets this on the AHB 2.4/5 GHz radio), reducing runtime host-memory preallocation for the 6 GHz radio.
 
 ## Releases
 
@@ -13,21 +12,7 @@ Pre-built images are on the [Releases](https://github.com/leoarry/openwrt-builde
 | Flavour | Tag format | Source | Notes |
 |---------|-----------|--------|-------|
 | **Vanilla** | `v25.12.x` | Official OpenWrt ImageBuilder | Standard OpenWrt with a curated package set. Stable and well-tested. |
-| **NSS** | `25.12-nss-<short-sha>` | [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) `25.12-nss` branch | NSS hardware offloading plus the AQR114C WAN and QCN9074 RAM fixes above. |
-
-### WAN reliability — kernel PHY patches
-
-Out of the box the MR7500 WAN (Aquantia AQR114C, USXGMII) is unreliable: the aquantia driver may not bind to the Clause-45 PHY (link issues at any speed), and even when it does, the port **drops ~10–20% of packets at 2.5G** with zero error counters.
-
-This build applies three kernel patches in [`patches/kernel/`](patches/kernel/), copied into `target/linux/qualcommax/patches-6.12/` at build time:
-
-| Patch | What it does |
-|-------|--------------|
-| `0990` | Retry Clause-45 PHY detection in `fwnode_mdio` (the AQR can be slow to answer ID reads after reset) |
-| `0991` | Late C45 driver-module request in `phy_device` so the aquantia driver binds instead of generic Clause-45 |
-| `0992` | **The 2.5G fix:** switch the AQR114C `config_aneg` to `aqr_config_aneg_set_prot`, which programs the system-interface protocol per speed so 2.5G USXGMII is set up correctly |
-
-`0992` is the one that eliminates the 2.5G packet loss; `0990`/`0991` ensure the aquantia driver actually drives the PHY. They use the high `099x` range so they apply after upstream patches and don't collide with qosmio's `09xx` numbering. Verified on hardware: clean 0% loss at both 1G and 2.5G.
+| **NSS** | `25.12-nss-<short-sha>` | [qosmio/openwrt-ipq](https://github.com/qosmio/openwrt-ipq) `25.12-nss` branch | NSS hardware offloading plus the QCN9074 RAM fix above. |
 
 ### QCN9074 RAM fix (NSS builds)
 
@@ -106,13 +91,10 @@ The build is driven by `config-nss.seed`, which is copied into the source tree a
 
 Uses the official OpenWrt buildbot image which has all required toolchain dependencies.
 
-The `nss-builder` named volume persists the cloned source tree and build artifacts (toolchain, downloaded sources, compiled objects) at `/builder` across runs, so reruns are incremental instead of starting from scratch — the build script fetches and updates the existing checkout rather than re-cloning. A named volume (not a host bind mount) is used on purpose: it lives in Docker's Linux VM and is case-sensitive, avoiding the case-collision failures that break kernel builds on Windows/macOS host filesystems. Remove it with `docker volume rm nss-builder` to force a clean build.
-
 **Linux/macOS:**
 ```bash
 docker run --rm \
   -v "$PWD:/workspace" \
-  -v nss-builder:/builder \
   -w /workspace \
   ghcr.io/openwrt/buildbot/buildworker-v3.8.0:v9 \
   bash build-openwrt-nss.sh
@@ -122,7 +104,6 @@ docker run --rm \
 ```powershell
 docker run --rm `
   -v "${PWD}:/workspace" `
-  -v nss-builder:/builder `
   -w /workspace `
   ghcr.io/openwrt/buildbot/buildworker-v3.8.0:v9 `
   bash build-openwrt-nss.sh
