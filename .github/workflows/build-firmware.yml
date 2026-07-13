@@ -70,7 +70,7 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}/files:/workspace/files" \
             -v "${{ github.workspace }}/bin:/workspace/bin" \
-            ghcr.io/leoarry/openwrt-builder-mr7500:latest \
+            ghcr.io/courteousgeek/openwrt-builder-mr7500:latest \
             ./build-openwrt.sh -v ${{ needs.check.outputs.version }}
 
       - name: Create or update GitHub Release
