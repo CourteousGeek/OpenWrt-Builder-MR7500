@@ -32,5 +32,5 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            ghcr.io/leoarry/openwrt-builder-mr7500:latest
-            ghcr.io/leoarry/openwrt-builder-mr7500:${{ github.sha }}
+            ghcr.io/courteousgeek/openwrt-builder-mr7500:latest
+            ghcr.io/courteousgeek/openwrt-builder-mr7500:${{ github.sha }}
